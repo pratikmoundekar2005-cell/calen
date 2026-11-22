@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,11 +19,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,8 +35,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,11 +50,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -70,6 +76,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val colors = CalenTheme.colors
+    val haptic = LocalHapticFeedback.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val currentTheme by viewModel.themeMode.collectAsState()
@@ -97,7 +104,10 @@ fun SettingsScreen(
         viewModel.refreshPermissionStates()
     }
 
-    BackHandler(onBack = onNavigateBack)
+    BackHandler(onBack = {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onNavigateBack()
+    })
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -108,18 +118,23 @@ fun SettingsScreen(
                     Text(
                         text = "Settings",
                         style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
                         color = colors.textPrimary
                     )
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = onNavigateBack,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onNavigateBack()
+                        },
                         modifier = Modifier.semantics { contentDescription = "Go back to calendar" }
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = colors.textPrimary
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 },
@@ -135,71 +150,83 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(horizontal = 22.dp, vertical = 14.dp)
         ) {
-            // Appearance section
+            // Appearance section with segmented pill selector
             SettingsSectionHeader(title = "Appearance")
-            for (mode in ThemeMode.entries) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { viewModel.setThemeMode(mode) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = (currentTheme == mode),
-                        onClick = { viewModel.setThemeMode(mode) },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = colors.textPrimary,
-                            unselectedColor = colors.textSecondary
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, colors.divider, RoundedCornerShape(10.dp))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                for (mode in ThemeMode.entries) {
+                    val isSelected = currentTheme == mode
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) colors.selectedDateFill else colors.background)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.setThemeMode(mode)
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = mode.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) colors.selectedDateText else colors.textPrimary
                         )
-                    )
-                    Text(
-                        text = mode.label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colors.textPrimary,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = colors.divider.copy(alpha = 0.35f))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // First day of week
+            // First day of week with segmented pill selector
             SettingsSectionHeader(title = "First day of week")
-            for (option in WeekStartOption.entries) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { viewModel.setWeekStart(option) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = (currentWeekStart == option),
-                        onClick = { viewModel.setWeekStart(option) },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = colors.textPrimary,
-                            unselectedColor = colors.textSecondary
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, colors.divider, RoundedCornerShape(10.dp))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                for (option in WeekStartOption.entries) {
+                    val isSelected = currentWeekStart == option
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) colors.selectedDateFill else colors.background)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.setWeekStart(option)
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = option.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) colors.selectedDateText else colors.textPrimary
                         )
-                    )
-                    Text(
-                        text = option.label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colors.textPrimary,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = colors.divider.copy(alpha = 0.35f))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Default reminder for new events
             SettingsSectionHeader(title = "Default reminder")
@@ -209,8 +236,11 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { reminderDropdownExpanded = true }
-                        .padding(vertical = 12.dp),
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            reminderDropdownExpanded = true
+                        }
+                        .padding(vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -242,6 +272,7 @@ fun SettingsScreen(
                                 )
                             },
                             onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 viewModel.setDefaultReminder(option)
                                 reminderDropdownExpanded = false
                             }
@@ -250,9 +281,9 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = colors.divider.copy(alpha = 0.35f))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Notifications Status & Settings
             SettingsSectionHeader(title = "Notifications & Reminders")
@@ -260,13 +291,13 @@ fun SettingsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Notification permission",
+                        text = "Notification alerts",
                         style = MaterialTheme.typography.bodyLarge,
                         color = colors.textPrimary
                     )
@@ -280,6 +311,7 @@ fun SettingsScreen(
                 if (!isNotificationGranted) {
                     TextButton(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                             } else {
@@ -296,6 +328,21 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(colors.selectedDateFill)
+                            .size(20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Permission granted",
+                            tint = colors.selectedDateText,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
 
@@ -303,7 +350,7 @@ fun SettingsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -314,7 +361,7 @@ fun SettingsScreen(
                         color = colors.textPrimary
                     )
                     Text(
-                        text = if (isExactAlarmPermitted) "Exact timing permitted" else "Inexact fallback active",
+                        text = if (isExactAlarmPermitted) "Exact hardware timing permitted" else "Inexact fallback active",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.textSecondary
                     )
@@ -323,6 +370,7 @@ fun SettingsScreen(
                 if (!isExactAlarmPermitted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     TextButton(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
                                 data = Uri.parse("package:${context.packageName}")
                             }
@@ -335,12 +383,27 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(colors.selectedDateFill)
+                            .size(20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Exact alarm permitted",
+                            tint = colors.selectedDateText,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(28.dp))
+            HorizontalDivider(color = colors.divider.copy(alpha = 0.35f))
+            Spacer(modifier = Modifier.height(28.dp))
 
             // About section
             Column(
@@ -360,9 +423,10 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Local on-device storage. No accounts, no network access, no tracking.",
+                    text = "A private, local calendar. No accounts, no network access, no tracking.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary
+                    color = colors.textSecondary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
         }
@@ -377,6 +441,6 @@ private fun SettingsSectionHeader(title: String) {
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
         color = colors.textPrimary,
-        modifier = Modifier.padding(bottom = 8.dp)
+        modifier = Modifier.padding(bottom = 10.dp)
     )
 }

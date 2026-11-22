@@ -1,5 +1,13 @@
 package com.personal.calen.ui.calendar
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +39,7 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,12 +54,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -87,10 +100,14 @@ fun CalendarScreen(
     val weekStartOption by viewModel.weekStart.collectAsState()
 
     val colors = CalenTheme.colors
+    val haptic = LocalHapticFeedback.current
     val firstDayOfWeek = viewModel.resolveFirstDayOfWeek(weekStartOption)
     val orderedWeekDays = remember(firstDayOfWeek) {
         MonthGridCalculator.getOrderedWeekDays(firstDayOfWeek)
     }
+
+    // Direction tracking for smooth month slide animation
+    var transitionDirection by remember { mutableIntStateOf(1) } // 1 for next, -1 for prev
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -101,18 +118,23 @@ fun CalendarScreen(
                     Text(
                         text = "Calen",
                         style = CalenWordmarkStyle,
-                        color = colors.textPrimary
+                        color = colors.textPrimary,
+                        modifier = Modifier.padding(start = 4.dp)
                     )
                 },
                 actions = {
                     IconButton(
-                        onClick = onNavigateToSettings,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onNavigateToSettings()
+                        },
                         modifier = Modifier.semantics { contentDescription = "Settings" }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Settings",
-                            tint = colors.textPrimary
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 },
@@ -125,18 +147,25 @@ fun CalendarScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { onNavigateToCreateEvent(selectedDate) },
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onNavigateToCreateEvent(selectedDate)
+                },
                 containerColor = colors.selectedDateFill,
                 contentColor = colors.selectedDateText,
                 shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 2.dp,
+                    pressedElevation = 4.dp
+                ),
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(50.dp)
                     .semantics { contentDescription = "Add event for selected date" }
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Add event",
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
@@ -149,30 +178,66 @@ fun CalendarScreen(
             // Month navigation header
             MonthNavigationHeader(
                 displayedMonth = displayedMonth,
-                onPreviousMonth = { viewModel.previousMonth() },
-                onNextMonth = { viewModel.nextMonth() },
-                onTodayClick = { viewModel.goToToday() }
+                onPreviousMonth = {
+                    transitionDirection = -1
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.previousMonth()
+                },
+                onNextMonth = {
+                    transitionDirection = 1
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.nextMonth()
+                },
+                onTodayClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.goToToday()
+                }
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Weekday initials row (7 columns)
             WeekdayHeaderRow(orderedWeekDays = orderedWeekDays)
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // 7-column Month Grid with swipe support
-            MonthGrid(
-                days = monthGrid,
-                onDateSelected = { day -> viewModel.selectDate(day.date) },
-                onSwipeLeft = { viewModel.nextMonth() },
-                onSwipeRight = { viewModel.previousMonth() }
-            )
+            // Animated Month Grid with swipe support
+            AnimatedContent(
+                targetState = displayedMonth,
+                transitionSpec = {
+                    if (transitionDirection > 0) {
+                        (slideInHorizontally(animationSpec = tween(240)) { it / 3 } + fadeIn(tween(240)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(240)) { -it / 3 } + fadeOut(tween(200)))
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(240)) { -it / 3 } + fadeIn(tween(240)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(240)) { it / 3 } + fadeOut(tween(200)))
+                    }
+                },
+                label = "MonthGridTransition"
+            ) { _ ->
+                MonthGrid(
+                    days = monthGrid,
+                    onDateSelected = { day ->
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.selectDate(day.date)
+                    },
+                    onSwipeLeft = {
+                        transitionDirection = 1
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.nextMonth()
+                    },
+                    onSwipeRight = {
+                        transitionDirection = -1
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.previousMonth()
+                    }
+                )
+            }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             HorizontalDivider(
-                color = colors.divider.copy(alpha = 0.5f),
+                color = colors.divider.copy(alpha = 0.4f),
                 thickness = 1.dp
             )
 
@@ -196,59 +261,73 @@ private fun MonthNavigationHeader(
     onTodayClick: () -> Unit
 ) {
     val colors = CalenTheme.colors
-    val monthTitle = remember(displayedMonth) {
-        val monthName = displayedMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
-        "$monthName ${displayedMonth.year}"
+    val monthName = remember(displayedMonth) {
+        displayedMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 18.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = monthTitle,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Medium,
-            color = colors.textPrimary
-        )
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = monthName,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textPrimary,
+                letterSpacing = 0.25.sp
+            )
+            Text(
+                text = "${displayedMonth.year}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Normal,
+                color = colors.textSecondary
+            )
+        }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             TextButton(
                 onClick = onTodayClick,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = "Today",
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
                     color = colors.textPrimary
                 )
             }
 
             IconButton(
                 onClick = onPreviousMonth,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(34.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = "Previous month",
-                    tint = colors.textPrimary
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
             IconButton(
                 onClick = onNextMonth,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(34.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = "Next month",
-                    tint = colors.textPrimary
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -264,18 +343,19 @@ private fun WeekdayHeaderRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         for (dayOfWeek in orderedWeekDays) {
-            val label = dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(2)
+            val label = dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(2).uppercase()
             Text(
                 text = label,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = colors.textSecondary,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp
             )
         }
     }
@@ -294,13 +374,13 @@ private fun MonthGrid(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp)
+            .padding(horizontal = 10.dp)
             .pointerInput(days) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        if (dragAccumulator < -80f) {
+                        if (dragAccumulator < -70f) {
                             onSwipeLeft()
-                        } else if (dragAccumulator > 80f) {
+                        } else if (dragAccumulator > 70f) {
                             onSwipeRight()
                         }
                         dragAccumulator = 0f
@@ -313,7 +393,7 @@ private fun MonthGrid(
                     }
                 )
             },
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         for (week in weeks) {
             Row(
@@ -328,7 +408,7 @@ private fun MonthGrid(
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
-                                indication = ripple(bounded = true),
+                                indication = ripple(bounded = true, radius = 22.dp),
                                 onClick = { onDateSelected(day) }
                             ),
                         contentAlignment = Alignment.Center
@@ -348,21 +428,27 @@ private fun CalendarDayCell(
     val colors = CalenTheme.colors
     val date = day.date
 
-    val textColor = when {
+    val targetTextColor = when {
         day.isSelected -> colors.selectedDateText
         day.isCurrentMonth -> colors.textPrimary
         else -> colors.textSubdued
     }
 
+    val textColor by animateColorAsState(
+        targetValue = targetTextColor,
+        animationSpec = tween(150),
+        label = "DayCellTextColor"
+    )
+
     val cellBackgroundModifier = when {
         day.isSelected -> Modifier.background(colors.selectedDateFill, CircleShape)
-        day.isToday -> Modifier.border(1.dp, colors.todayIndicator, CircleShape)
+        day.isToday -> Modifier.border(1.2.dp, colors.todayIndicator, CircleShape)
         else -> Modifier
     }
 
     Column(
         modifier = Modifier
-            .size(40.dp)
+            .size(38.dp)
             .clip(CircleShape)
             .then(cellBackgroundModifier)
             .semantics {
@@ -379,7 +465,7 @@ private fun CalendarDayCell(
             textAlign = TextAlign.Center
         )
 
-        // Event indicator dot
+        // Refined event indicator dot
         if (day.hasEvents) {
             Spacer(modifier = Modifier.height(2.dp))
             Box(
@@ -409,19 +495,34 @@ private fun SelectedDateAgenda(
     val formattedDate = remember(selectedDate) { selectedDate.format(dateHeaderFormatter) }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = formattedDate,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium,
-            color = colors.textPrimary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = formattedDate,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textPrimary
+            )
+
+            if (events.isNotEmpty()) {
+                Text(
+                    text = "${events.size} ${if (events.size == 1) "event" else "events"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textSecondary
+                )
+            }
+        }
 
         if (events.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 32.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -431,13 +532,24 @@ private fun SelectedDateAgenda(
                     Text(
                         text = "Nothing scheduled",
                         style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
                         color = colors.textSecondary
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextButton(onClick = onAddEventClick) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Your day is completely open",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSubdued
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TextButton(
+                        onClick = onAddEventClick,
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
                         Text(
-                            text = "+ Add event",
+                            text = "+ Plan an event",
                             style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
                         )
                     }
@@ -446,7 +558,7 @@ private fun SelectedDateAgenda(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(events, key = { it.id }) { event ->
@@ -465,8 +577,12 @@ private fun AgendaEventItem(
     event: Event,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val colors = CalenTheme.colors
-    val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val is24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
+    val timeFormatter = remember(is24Hour) {
+        if (is24Hour) DateTimeFormatter.ofPattern("HH:mm") else DateTimeFormatter.ofPattern("h:mm a")
+    }
 
     val timeLabel = when {
         event.isAllDay -> "All day"
@@ -480,19 +596,23 @@ private fun AgendaEventItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = true),
+                onClick = onClick
+            )
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Vertical indicator accent
+        // Vertical architectural accent bar
         Box(
             modifier = Modifier
-                .width(3.dp)
-                .height(36.dp)
-                .background(colors.textPrimary, RoundedCornerShape(2.dp))
+                .width(2.5.dp)
+                .height(34.dp)
+                .background(colors.textPrimary, RoundedCornerShape(1.dp))
         )
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -504,11 +624,11 @@ private fun AgendaEventItem(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(3.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (timeLabel.isNotEmpty()) {
                     Text(
@@ -526,7 +646,7 @@ private fun AgendaEventItem(
                             modifier = Modifier.size(13.dp),
                             tint = colors.textSecondary
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = event.recurrenceRule.label,
                             style = MaterialTheme.typography.labelSmall,

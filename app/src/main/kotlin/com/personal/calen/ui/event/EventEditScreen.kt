@@ -4,7 +4,9 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,11 +52,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.personal.calen.model.RecurrenceRule
 import com.personal.calen.model.ReminderOption
 import com.personal.calen.ui.theme.CalenTheme
@@ -71,6 +77,7 @@ fun EventEditScreen(
 ) {
     val context = LocalContext.current
     val colors = CalenTheme.colors
+    val haptic = LocalHapticFeedback.current
 
     val title by viewModel.title.collectAsState()
     val description by viewModel.description.collectAsState()
@@ -84,8 +91,13 @@ fun EventEditScreen(
     val isSaveSuccess by viewModel.isSaveSuccess.collectAsState()
 
     var showDiscardDialog by remember { mutableStateOf(false) }
-    var reminderDropdownExpanded by remember { mutableStateOf(false) }
     var repeatDropdownExpanded by remember { mutableStateOf(false) }
+
+    val is24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("EEE, d MMM yyyy") }
+    val timeFormatter = remember(is24Hour) {
+        if (is24Hour) DateTimeFormatter.ofPattern("HH:mm") else DateTimeFormatter.ofPattern("h:mm a")
+    }
 
     LaunchedEffect(isSaveSuccess) {
         if (isSaveSuccess) {
@@ -94,6 +106,7 @@ fun EventEditScreen(
     }
 
     val handleBack = {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         if (viewModel.isModified) {
             showDiscardDialog = true
         } else {
@@ -102,12 +115,6 @@ fun EventEditScreen(
     }
 
     BackHandler(onBack = handleBack)
-
-    val is24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("EEE, d MMM yyyy") }
-    val timeFormatter = remember(is24Hour) {
-        if (is24Hour) DateTimeFormatter.ofPattern("HH:mm") else DateTimeFormatter.ofPattern("h:mm a")
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -118,6 +125,7 @@ fun EventEditScreen(
                     Text(
                         text = if (isEditMode) "Edit event" else "New event",
                         style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
                         color = colors.textPrimary
                     )
                 },
@@ -129,20 +137,25 @@ fun EventEditScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = colors.textPrimary
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 },
                 actions = {
                     IconButton(
-                        onClick = { viewModel.saveEvent() },
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.saveEvent()
+                        },
                         enabled = viewModel.isSaveValid,
                         modifier = Modifier.semantics { contentDescription = "Save event" }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Save",
-                            tint = if (viewModel.isSaveValid) colors.textPrimary else colors.textSubdued
+                            tint = if (viewModel.isSaveValid) colors.textPrimary else colors.textSubdued,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 },
@@ -158,14 +171,14 @@ fun EventEditScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(horizontal = 22.dp, vertical = 14.dp)
         ) {
-            // Event title
+            // Event title input
             OutlinedTextField(
                 value = title,
                 onValueChange = { viewModel.title.value = it },
                 label = { Text("Title") },
-                placeholder = { Text("Event title") },
+                placeholder = { Text("What are you planning?") },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -176,18 +189,20 @@ fun EventEditScreen(
                     focusedTextColor = colors.textPrimary,
                     unfocusedTextColor = colors.textPrimary,
                     focusedLabelColor = colors.textPrimary,
-                    unfocusedLabelColor = colors.textSecondary
+                    unfocusedLabelColor = colors.textSecondary,
+                    cursorColor = colors.textPrimary
                 )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Date row
+            // Date picker row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         DatePickerDialog(
                             context,
                             { _, y, m, d ->
@@ -219,7 +234,7 @@ fun EventEditScreen(
                 )
             }
 
-            HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
+            HorizontalDivider(color = colors.divider.copy(alpha = 0.35f))
 
             // All-day switch row
             Row(
@@ -229,14 +244,26 @@ fun EventEditScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "All-day",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = colors.textPrimary
-                )
+                Column {
+                    Text(
+                        text = "All-day",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = colors.textPrimary
+                    )
+                    if (isAllDay && reminderOption != ReminderOption.NO_REMINDER) {
+                        Text(
+                            text = "Reminder delivers at 9:00 AM",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.textSecondary
+                        )
+                    }
+                }
                 Switch(
                     checked = isAllDay,
-                    onCheckedChange = { viewModel.isAllDay.value = it },
+                    onCheckedChange = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.isAllDay.value = it
+                    },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = colors.selectedDateText,
                         checkedTrackColor = colors.selectedDateFill,
@@ -247,9 +274,9 @@ fun EventEditScreen(
                 )
             }
 
-            // Timed fields (only if not all day)
+            // Timed fields (only if not all-day)
             if (!isAllDay) {
-                HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
+                HorizontalDivider(color = colors.divider.copy(alpha = 0.35f))
 
                 // Time picker row
                 Row(
@@ -274,6 +301,7 @@ fun EventEditScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     TimePickerDialog(
                                         context,
                                         { _, hour, min ->
@@ -305,6 +333,7 @@ fun EventEditScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     TimePickerDialog(
                                         context,
                                         { _, hour, min ->
@@ -320,6 +349,41 @@ fun EventEditScreen(
                     }
                 }
 
+                // Quick duration chips for fast executive scheduling
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val durations = listOf(30 to "30m", 60 to "1h", 90 to "1.5h", 120 to "2h")
+                    for ((mins, label) in durations) {
+                        val isSelected = endTime == startTime.plusMinutes(mins.toLong())
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .border(
+                                    1.dp,
+                                    if (isSelected) colors.textPrimary else colors.divider,
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .background(if (isSelected) colors.selectedDateFill else colors.background)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.endTime.value = viewModel.startTime.value.plusMinutes(mins.toLong())
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) colors.selectedDateText else colors.textPrimary
+                            )
+                        }
+                    }
+                }
+
                 // Validation note if end is before start
                 if (!endTime.isAfter(startTime)) {
                     Text(
@@ -331,65 +395,52 @@ fun EventEditScreen(
                 }
             }
 
-            HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
+            HorizontalDivider(color = colors.divider.copy(alpha = 0.35f))
 
-            // Reminder selector row
-            Box(modifier = Modifier.fillMaxWidth()) {
+            // Reminder section with horizontal chips
+            Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                Text(
+                    text = "Reminder",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = colors.textPrimary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { reminderDropdownExpanded = true }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(
-                            text = "Reminder",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = colors.textPrimary
-                        )
-                        if (isAllDay && reminderOption != ReminderOption.NO_REMINDER) {
-                            Text(
-                                text = "Delivered at 9:00 AM",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.textSecondary
-                            )
-                        }
-                    }
-                    Text(
-                        text = reminderOption.label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.textPrimary
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = reminderDropdownExpanded,
-                    onDismissRequest = { reminderDropdownExpanded = false },
-                    modifier = Modifier.background(colors.surface)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     for (option in ReminderOption.entries) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = option.label,
-                                    color = colors.textPrimary,
-                                    fontWeight = if (option == reminderOption) FontWeight.Bold else FontWeight.Normal
+                        val isSelected = reminderOption == option
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .border(
+                                    1.dp,
+                                    if (isSelected) colors.textPrimary else colors.divider,
+                                    RoundedCornerShape(16.dp)
                                 )
-                            },
-                            onClick = {
-                                viewModel.reminderOption.value = option
-                                reminderDropdownExpanded = false
-                            }
-                        )
+                                .background(if (isSelected) colors.selectedDateFill else colors.background)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.reminderOption.value = option
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = option.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) colors.selectedDateText else colors.textPrimary
+                            )
+                        }
                     }
                 }
             }
 
-            HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
+            HorizontalDivider(color = colors.divider.copy(alpha = 0.35f))
 
             // Repeat selector row
             Box(modifier = Modifier.fillMaxWidth()) {
@@ -397,16 +448,28 @@ fun EventEditScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { repeatDropdownExpanded = true }
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            repeatDropdownExpanded = true
+                        }
                         .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "Repeat",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colors.textPrimary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Repeat,
+                            contentDescription = "Repeat",
+                            modifier = Modifier.size(18.dp),
+                            tint = colors.textSecondary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Repeat",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = colors.textPrimary
+                        )
+                    }
                     Text(
                         text = recurrenceRule.label,
                         style = MaterialTheme.typography.bodyLarge,
@@ -430,6 +493,7 @@ fun EventEditScreen(
                                 )
                             },
                             onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 viewModel.recurrenceRule.value = rule
                                 repeatDropdownExpanded = false
                             }
@@ -440,7 +504,7 @@ fun EventEditScreen(
 
             // Scope warning if repeating event in edit mode
             if (isEditMode && recurrenceRule != RecurrenceRule.NONE) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Note: Changes will apply to all occurrences in this series.",
                     style = MaterialTheme.typography.bodySmall,
@@ -455,7 +519,7 @@ fun EventEditScreen(
                 value = description,
                 onValueChange = { viewModel.description.value = it },
                 label = { Text("Notes (optional)") },
-                placeholder = { Text("Add notes or description") },
+                placeholder = { Text("Add any details or location") },
                 minLines = 3,
                 maxLines = 6,
                 modifier = Modifier
@@ -467,7 +531,8 @@ fun EventEditScreen(
                     focusedTextColor = colors.textPrimary,
                     unfocusedTextColor = colors.textPrimary,
                     focusedLabelColor = colors.textPrimary,
-                    unfocusedLabelColor = colors.textSecondary
+                    unfocusedLabelColor = colors.textSecondary,
+                    cursorColor = colors.textPrimary
                 )
             )
         }
