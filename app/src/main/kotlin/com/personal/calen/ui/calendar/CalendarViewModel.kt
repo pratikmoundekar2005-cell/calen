@@ -28,7 +28,7 @@ import java.time.YearMonth
 import java.time.temporal.WeekFields
 import java.util.Locale
 
-class CalendarViewModel(
+class CalendarViewModel @JvmOverloads constructor(
     application: Application,
     private val eventRepository: EventRepository = RoomEventRepository(
         CalenDatabase.getDatabase(application).eventDao()

@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 
-class EventEditViewModel(
+class EventEditViewModel @JvmOverloads constructor(
     application: Application,
     private val eventRepository: EventRepository = RoomEventRepository(
         CalenDatabase.getDatabase(application).eventDao()
