@@ -2,6 +2,17 @@
 
 A minimalist, quiet, and private local-only Android calendar built with Kotlin and Jetpack Compose.
 
+[![Release](https://img.shields.io/github/v/release/pratikmoundekar2005-cell/calen?label=Release&color=000000)](https://github.com/pratikmoundekar2005-cell/calen/releases/latest)
+[![Download APK](https://img.shields.io/badge/Download-APK-000000?logo=android&logoColor=white)](https://github.com/pratikmoundekar2005-cell/calen/releases/download/v1.0.0/calen-v1.0.0.apk)
+
+---
+
+## Download & Installation
+
+- 📲 **[Download Calen v1.0.0 APK](https://github.com/pratikmoundekar2005-cell/calen/releases/download/v1.0.0/calen-v1.0.0.apk)** (19.5 MB)
+- Compatible with any Android device running **Android 8.0 (API 26)** or higher.
+- Requires zero network permissions and no Google Play Services.
+
 ---
 
 ## Philosophy & Core Principles
